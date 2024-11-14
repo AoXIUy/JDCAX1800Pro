@@ -52,9 +52,9 @@ env:
   WRT_TEST: ${{inputs.WRT_TEST}}
 
 jobs:
-  wrt_core:
+  core:
     name: ${{inputs.WRT_SOURCE}}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout Projects
         uses: actions/checkout@main
@@ -93,12 +93,11 @@ jobs:
           sudo -E systemctl daemon-reload
           sudo -E timedatectl set-timezone "Asia/Shanghai"
 
-
       - name: Initialization Values
         run: |
           export WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d_%H.%M.%S")
           export WRT_CI=$(basename $GITHUB_WORKSPACE)
-          export WRT_VER=$(echo $WRT_REPO | cut -d '/' -f 4)-$WRT_BRANCH
+          export WRT_VER=$(echo $WRT_REPO | cut -d '/' -f 5-)-$WRT_BRANCH
           export WRT_TYPE=$(sed -n "1{s/^#//;s/\r$//;p;q}" $GITHUB_WORKSPACE/Config/$WRT_TARGET.txt)
 
           echo "WRT_DATE=$WRT_DATE" >> $GITHUB_ENV
@@ -116,17 +115,9 @@ jobs:
         run: |
           find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
-      - name: Check Patches
-        run: |
-          if [ -f "$GITHUB_WORKSPACE/Patches/Patches.sh" ]; then
-            $GITHUB_WORKSPACE/Patches/Patches.sh
-          else
-            echo "No patches need to be installed!"
-          fi
-
       - name: Check Caches
-        if: env.WRT_TEST != 'true'
         id: check-cache
+        if: env.WRT_TEST != 'true'
         uses: actions/cache@main
         with:
           key: ${{env.WRT_TARGET}}-${{env.WRT_VER}}-${{env.WRT_HASH}}
@@ -157,7 +148,9 @@ jobs:
       - name: Update Feeds
         run: |
           cd ./wrt/
-          $GITHUB_WORKSPACE/Scripts/diy.sh
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
       - name: Custom Packages
         run: |
@@ -173,9 +166,10 @@ jobs:
           rm -rf ./tmp* ./.config*
 
           cat $GITHUB_WORKSPACE/Config/$WRT_TARGET.txt $GITHUB_WORKSPACE/Config/GENERAL.txt >> .config
+
           $GITHUB_WORKSPACE/Scripts/Settings.sh
 
-          make defconfig
+          make defconfig -j$(nproc)
 
       - name: Download Packages
         if: env.WRT_TEST != 'true'
@@ -235,6 +229,8 @@ jobs:
             不要问，刷就完事了！
 
             MTK和QCA全系带开源硬件加速，别问了！
+
+            WIFI密码：12345678
 
             源码：${{env.WRT_REPO}}
             分支：${{env.WRT_BRANCH}}
